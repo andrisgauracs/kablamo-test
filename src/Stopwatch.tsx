@@ -1,102 +1,128 @@
-import * as React from "react";
-import * as ReactDOM from "react-dom";
-import { Component, ClassAttributes } from "react";
+import { FC, useEffect, useRef, useState } from "react";
+import "./App.css";
+
 const formattedSeconds = (sec: number) =>
-  Math.floor(sec / 60) + ":" + ("0" + (sec % 60)).slice(-2);
-interface StopwatchProps extends ClassAttributes<Stopwatch> {
+  `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, "0")}`;
+
+interface StopwatchProps {
   initialSeconds: number;
 }
-class Stopwatch extends Component<StopwatchProps, any> {
-  incrementer: any;
-  laps: any[];
-  constructor(props: StopwatchProps) {
-    super(props);
-    this.state = {
-      secondsElapsed: props.initialSeconds,
-      lastClearedIncrementer: null,
-    };
-    this.laps = [];
-  }
-  handleStartClick() {
-    this.incrementer = setInterval(
-      () =>
-        this.setState({
-          secondsElapsed: this.state.secondsElapsed + 1,
-        }),
-      1000
-    );
-  }
-  handleStopClick() {
-    clearInterval(this.incrementer);
-    this.setState({
-      lastClearedIncrementer: this.incrementer,
-    });
-  }
 
-  handleResetClick() {
-    clearInterval(this.incrementer);
-    (this.laps = []),
-      this.setState({
-        secondsElapsed: 0,
-      });
-  }
-  handleLabClick() {
-    this.laps = this.laps.concat([this.state.secondsElapsed]);
-    this.forceUpdate();
-  }
-  handleDeleteClick(index: number) {
-    return () => this.laps.splice(index, 1);
-  }
-  render() {
-    const { secondsElapsed, lastClearedIncrementer } = this.state;
-    return (
-      <div className="stopwatch">
-        <h1 className="stopwatch-timer">{formattedSeconds(secondsElapsed)}</h1>
-        {secondsElapsed === 0 || this.incrementer === lastClearedIncrementer ? (
-          <button
-            type="button"
-            className="start-btn"
-            onClick={this.handleStartClick}
-          >
-            start
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="stop-btn"
-            onClick={this.handleStopClick}
-          >
-            stop
-          </button>
-        )}
-        {secondsElapsed !== 0 && this.incrementer !== lastClearedIncrementer ? (
-          <button type="button" onClick={this.handleLabClick}>
-            lap
-          </button>
-        ) : null}
-        {secondsElapsed !== 0 && this.incrementer === lastClearedIncrementer ? (
-          <button type="button" onClick={this.handleResetClick}>
-            reset
-          </button>
-        ) : null}
-        <div className="stopwatch-laps">
-          {this.laps &&
-            this.laps.map((lap, i) => (
-              <Lap
-                index={i + 1}
-                lap={lap}
-                onDelete={this.handleDeleteClick(i)}
-              />
-            ))}
-        </div>
+const Stopwatch: FC<StopwatchProps> = ({ initialSeconds }) => {
+  const [secondsElapsed, setSecondsElapsed] = useState(initialSeconds);
+  const [lastClearedIncrementer, setLastClearedIncrementer] = useState<
+    number | undefined
+  >(undefined);
+  const [laps, setLaps] = useState<number[]>([]);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const incrementer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (incrementer.current !== null) {
+        clearInterval(incrementer.current);
+      }
+    };
+  }, []);
+
+  const handleStartClick = () => {
+    setTimerRunning(true);
+    incrementer.current = setInterval(() => {
+      setSecondsElapsed((prev) => prev + 1);
+    }, 1000);
+  };
+
+  const handleStopClick = () => {
+    if (incrementer.current !== null) {
+      clearInterval(incrementer.current);
+    }
+    setLastClearedIncrementer(incrementer.current || undefined);
+    setTimerRunning(false);
+  };
+
+  const handleResetClick = () => {
+    if (incrementer.current !== null) {
+      clearInterval(incrementer.current);
+      incrementer.current = null;
+    }
+    setSecondsElapsed(initialSeconds);
+    setTimerRunning(false);
+    setLaps([]);
+    setLastClearedIncrementer(undefined);
+  };
+
+  const handleLapClick = () => {
+    setLaps((prev) => [...prev, secondsElapsed]);
+  };
+
+  const handleDeleteClick = (index: number) => {
+    setLaps((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const shouldShowStartButton =
+    (secondsElapsed === initialSeconds ||
+      incrementer.current === lastClearedIncrementer) &&
+    !timerRunning;
+
+  return (
+    <div className="stopwatch">
+      <h1 className="stopwatch-timer">{formattedSeconds(secondsElapsed)}</h1>
+      <StartStopButton
+        shouldShowStartButton={shouldShowStartButton}
+        handleStartClick={handleStartClick}
+        handleStopClick={handleStopClick}
+      />
+      {timerRunning && incrementer.current !== lastClearedIncrementer && (
+        <BaseButton onClick={handleLapClick}>lap</BaseButton>
+      )}
+      {!timerRunning && incrementer.current === lastClearedIncrementer && (
+        <BaseButton onClick={handleResetClick}>reset</BaseButton>
+      )}
+      <div className="stopwatch-laps">
+        {laps.map((lap, i) => (
+          <Lap
+            key={i}
+            index={i + 1}
+            lap={lap}
+            onDelete={() => handleDeleteClick(i)}
+          />
+        ))}
       </div>
-    );
-  }
-}
-const Lap = (props: { index: number; lap: number; onDelete: () => {} }) => (
-  <div key={props.index} className="stopwatch-lap">
-    <strong>{props.index}</strong>/ {formattedSeconds(props.lap)}{" "}
-    <button onClick={props.onDelete}> X </button>
+    </div>
+  );
+};
+
+// Helper components
+
+const BaseButton: FC<{ onClick: () => void; children: React.ReactNode }> = ({
+  onClick,
+  children,
+}) => (
+  <button type="button" onClick={onClick}>
+    {children}
+  </button>
+);
+
+const StartStopButton: FC<{
+  shouldShowStartButton: boolean;
+  handleStartClick: () => void;
+  handleStopClick: () => void;
+}> = ({ shouldShowStartButton, handleStartClick, handleStopClick }) => (
+  <BaseButton
+    onClick={shouldShowStartButton ? handleStartClick : handleStopClick}
+  >
+    {shouldShowStartButton ? "start" : "stop"}
+  </BaseButton>
+);
+
+const Lap: FC<{ index: number; lap: number; onDelete: () => void }> = ({
+  index,
+  lap,
+  onDelete,
+}) => (
+  <div className="stopwatch-lap">
+    <strong>{index}</strong>/ {formattedSeconds(lap)}{" "}
+    <button onClick={onDelete}> X </button>
   </div>
 );
 
