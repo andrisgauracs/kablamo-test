@@ -5,6 +5,6 @@ import Stopwatch from "./Stopwatch.tsx";
 
 createRoot(document.getElementById("content")!).render(
   <StrictMode>
-    <Stopwatch />
+    <Stopwatch initialSeconds={0} />
   </StrictMode>
 );
